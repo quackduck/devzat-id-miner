@@ -23,7 +23,6 @@ var (
 )
 
 func main() {
-	// get first argument and set prefix to that
 	if len(os.Args) > 2 {
 		prefix = os.Args[1]
 		var err error
@@ -34,7 +33,6 @@ func main() {
 	} else if len(os.Args) > 1 {
 		prefix = os.Args[1]
 	} else {
-		// print help message
 		fmt.Println("error: need at least one argument.\nUsage:\n   ./mineid <prefix> [<num of threads>]")
 		return
 	}
@@ -43,7 +41,6 @@ func main() {
 	for _, r := range "0123456789abcdef" {
 		trimmed = strings.ReplaceAll(trimmed, string(r), "")
 	}
-	// is there a more efficient way to do this?
 	if trimmed != "" {
 		if len(trimmed) == 1 {
 			fmt.Println("error: prefix contains this non-hex character: " + trimmed)
@@ -68,21 +65,12 @@ func worker(done chan bool) {
 		priv, sshpub, id := genKey(i.FillBytes(key))
 		if strings.HasPrefix(id, prefix) {
 			fmt.Print("Found key with id: ")
-			color.Yellow(id)
-			//fmt.Println(base64.StdEncoding.EncodeToString(priv))
-			//pem.Encode(os.Stdout, &pem.Block{
-			//	Type:  "DEVZAT-GEN PRIVATE KEY",
-			//	Bytes: priv})
-			color.Yellow("\nPrivate key: ")
+			color.Yellow(id + "\nPrivate key: ")
 			blk, err := sshmarshal.MarshalPrivateKey(priv, "")
 			if err != nil {
 				panic(err)
 			}
 			pem.Encode(os.Stdout, blk)
-			//pem.Encode(os.Stdout, &pem.Block{Type: "edkey", Bytes: edkey.MarshalED25519PrivateKey(priv)})
-			//pem.Encode(os.Stdout, &pem.Block{
-			//	Type:  "DEVZAT-GEN PUBLIC KEY",
-			//	Bytes: pub})
 			color.Yellow("\nPublic key: ")
 			fmt.Println(string(ssh.MarshalAuthorizedKey(sshpub)))
 			done <- true
@@ -108,10 +96,6 @@ func bytesToBigint(b []byte) *big.Int {
 func genKey(s []byte) (privkey ed25519.PrivateKey, sshpubkey ssh.PublicKey, id string) {
 	priv := ed25519.NewKeyFromSeed(s)
 	pub := priv.Public().(ed25519.PublicKey)
-	//pub, priv, err := ed25519.GenerateKey(nil)
-	//if err != nil {
-	//	panic(err)
-	//}
 	sshPubKey, err := ssh.NewPublicKey(pub)
 	if err != nil {
 		panic(err)

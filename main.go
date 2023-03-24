@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/caarlos0/sshmarshal"
@@ -80,30 +81,31 @@ func doStatistics() {
 
 var updateDuration = 2 * time.Second
 
+var keysTriedAllThreads uint64 = 0
+
 func worker(done chan bool, threadNum int) {
 	i := bytesToBigint(getRandBytes32())
 	key := make([]byte, 32)
 	oneAsBigint := big.NewInt(1)
-	keysTried := uint64(0)
 	if threadNum == 1 {
 		go func() {
 			isFirstRun := true
 			for {
-				keysTriedLastTime := keysTried
+				keysTriedLastTime := keysTriedAllThreads
 				time.Sleep(updateDuration)
 				if isFirstRun {
 					fmt.Print("\n\n")
 					isFirstRun = false
 				}
-				currSpeed := float64(numThreads) * float64(keysTried-keysTriedLastTime) / (updateDuration.Seconds()) // approx keys/s
+				currSpeed := float64(keysTriedAllThreads-keysTriedLastTime) / (updateDuration.Seconds()) // approx keys/s
 				//timeLeft := (float64(expectedNumOfKeys) - float64(numThreads)*float64(keysTried)) / currSpeed        // approx seconds
-				timeLeft50 := time.Duration((float64(expectedNumOfKeys50Percent) - float64(numThreads)*float64(keysTried)) / currSpeed * float64(time.Second))
-				timeLeft75 := time.Duration((float64(expectedNumOfKeys75Percent) - float64(numThreads)*float64(keysTried)) / currSpeed * float64(time.Second))
-				fmt.Printf("\u001B[A\u001B[2K\rCurrent speed: %.1f keys/ms. 50%% - 75%% chance of being done in: %s - %s\n", currSpeed/1000, color.YellowString(timeLeft50.Round(time.Millisecond*100).String()), color.YellowString(timeLeft75.Round(time.Millisecond*100).String()))
+				timeLeft50 := time.Duration((float64(expectedNumOfKeys50Percent) - float64(keysTriedAllThreads)) / currSpeed * float64(time.Second))
+				timeLeft75 := time.Duration((float64(expectedNumOfKeys75Percent) - float64(keysTriedAllThreads)) / currSpeed * float64(time.Second))
+				fmt.Printf("\u001B[A\u001B[2K\rCurrent speed: %.1f keys/ms. 50%% : 75%% chance of success in %s : %s\n", currSpeed/1000, color.YellowString(timeLeft50.Round(time.Millisecond*100).String()), color.YellowString(timeLeft75.Round(time.Millisecond*100).String()))
 			}
 		}()
 	}
-	for ; ; keysTried++ {
+	for ; ; atomic.AddUint64(&keysTriedAllThreads, 1) {
 		priv, sshpub, id := genKey(i.FillBytes(key))
 		if strings.HasPrefix(id, prefix) {
 			fmt.Print("\nFound key with id: ")
@@ -115,7 +117,7 @@ func worker(done chan bool, threadNum int) {
 			pem.Encode(os.Stdout, blk)
 			color.Yellow("\nPublic key: ")
 			fmt.Println(string(ssh.MarshalAuthorizedKey(sshpub)))
-			fmt.Printf("Took %s and approximately %s tries. Expected to take %s on average\n", color.YellowString(time.Since(startTime).Round(time.Millisecond*100).String()), color.YellowString(format(keysTried*uint64(numThreads))), color.YellowString(format(expectedNumOfKeys)))
+			fmt.Printf("Took %s and approximately %s tries. Expected to take %s on average\n", color.YellowString(time.Since(startTime).Round(time.Millisecond*100).String()), color.YellowString(format(keysTriedAllThreads)), color.YellowString(format(expectedNumOfKeys)))
 			done <- true
 			break
 		}
